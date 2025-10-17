@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 from PIL import Image
+import datetime
 
 # Configuración de la página
 st.set_page_config(
@@ -216,7 +217,16 @@ with tab1:
                     if category == "PRO LEAGUE":
                         # Seleccionar por nombre
                         player_names = df_team['Name'].dropna().unique().tolist()
+                        
+                        # Detectar cambio de jugador
+                        prev_player = st.session_state.get('prev_selected_player', None)
                         selected_name = st.selectbox("Player Name", ["Select..."] + sorted(player_names), key="player_select")
+                        
+                        # Si cambió el jugador, forzar rerun
+                        if selected_name != prev_player and selected_name != "Select...":
+                            st.session_state.prev_selected_player = selected_name
+                            st.rerun()
+                        
                         selected_number = None
                         
                         # Inicializar valores por defecto
@@ -261,7 +271,16 @@ with tab1:
                         # Seleccionar por número
                         numbers = df_team['Number'].dropna().unique().tolist()
                         numbers = [int(n) if isinstance(n, (int, float)) and not pd.isna(n) else n for n in numbers]
+                        
+                        # Detectar cambio de jugador
+                        prev_number = st.session_state.get('prev_selected_number', None)
                         selected_number = st.selectbox("Number", ["Select..."] + sorted(numbers, key=lambda x: (isinstance(x, str), x)), key="number_select")
+                        
+                        # Si cambió el número, forzar rerun
+                        if selected_number != prev_number and selected_number != "Select...":
+                            st.session_state.prev_selected_number = selected_number
+                            st.rerun()
+                        
                         selected_name = None
                         
                         # Inicializar valores por defecto
@@ -434,35 +453,45 @@ with tab1:
                 col1, col2, col3 = st.columns([1, 1, 1])
                 with col2:
                     if st.button("💾 Save Match Report", type="primary", use_container_width=True):
-                        # Crear DataFrame con los jugadores
-                        report_df = pd.DataFrame(st.session_state.players_list)
-                        
-                        # Añadir información del partido
-                        report_df.insert(0, 'Scout', scout)
-                        report_df.insert(1, 'Date', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-                        report_df.insert(2, 'League', selected_league if selected_league != "Select..." else category)
-                        report_df.insert(3, 'Home Team', home_team)
-                        report_df.insert(4, 'Away Team', away_team)
-                        
-                        # Guardar en Excel
-                        report_file = CATEGORY_REPORT_FILES.get(category)
-                        
-                        if os.path.exists(report_file):
-                            # Cargar existente y añadir
-                            existing_df = pd.read_excel(report_file)
-                            final_df = pd.concat([existing_df, report_df], ignore_index=True)
-                        else:
-                            final_df = report_df
-                        
-                        final_df.to_excel(report_file, index=False)
-                        
-                        st.success(f"✅ Match report saved successfully to {report_file}!")
-                        st.balloons()
-                        
-                        # Limpiar lista
-                        st.session_state.players_list = []
-                        st.session_state.show_player_form = False
-                        st.rerun()
+                        try:
+                            # Crear DataFrame con los jugadores
+                            report_df = pd.DataFrame(st.session_state.players_list)
+                            
+                            # Añadir información del partido
+                            report_df.insert(0, 'Scout', scout)
+                            report_df.insert(1, 'Date', datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                            report_df.insert(2, 'League', selected_league if selected_league != "Select..." else category)
+                            report_df.insert(3, 'Home Team', home_team)
+                            report_df.insert(4, 'Away Team', away_team)
+                            
+                            # Guardar en Excel
+                            report_file = CATEGORY_REPORT_FILES.get(category)
+                            
+                            if os.path.exists(report_file):
+                                # Cargar existente y añadir
+                                try:
+                                    existing_df = pd.read_excel(report_file)
+                                    final_df = pd.concat([existing_df, report_df], ignore_index=True)
+                                except Exception as e:
+                                    st.warning(f"Could not load existing file: {e}. Creating new file.")
+                                    final_df = report_df
+                            else:
+                                final_df = report_df
+                            
+                            # Guardar con openpyxl
+                            final_df.to_excel(report_file, index=False, engine='openpyxl')
+                            
+                            st.success(f"✅ Match report saved successfully!")
+                            st.info(f"📁 Saved to: {report_file}")
+                            st.balloons()
+                            
+                            # Limpiar lista
+                            st.session_state.players_list = []
+                            st.session_state.show_player_form = False
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Error saving report: {str(e)}")
+                            st.error(f"Please check file permissions and try again.")
                 
                 with col3:
                     if st.button("🗑️ Clear All", use_container_width=True):

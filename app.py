@@ -25,6 +25,12 @@ CATEGORY_REPORT_FILES = {
     "U18 PREMIER LEAGUE": "mreportsu18.xlsx"
 }
 
+CATEGORY_ICONS = {
+    "PRO LEAGUE": "Senior1DIV.png",
+    "SAUDI U21 LEAGUE": "U21logo.png",
+    "U18 PREMIER LEAGUE": "U18logo.png"
+}
+
 # Lista de países del mundo
 COUNTRIES = [
     "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia",
@@ -127,7 +133,20 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 ])
 
 with tab1:
-    st.header(f"Create Match Report - {category}")
+    # Mostrar icono de categoría
+    icon_file = CATEGORY_ICONS.get(category)
+    if icon_file and os.path.exists(icon_file):
+        col_icon, col_title = st.columns([1, 9])
+        with col_icon:
+            try:
+                icon = Image.open(icon_file)
+                st.image(icon, width=80)
+            except:
+                pass
+        with col_title:
+            st.header(f"Create Match Report - {category}")
+    else:
+        st.header(f"Create Match Report - {category}")
     
     # Cargar base de datos según categoría
     db_file = CATEGORY_DB_FILES.get(category)
@@ -217,16 +236,7 @@ with tab1:
                     if category == "PRO LEAGUE":
                         # Seleccionar por nombre
                         player_names = df_team['Name'].dropna().unique().tolist()
-                        
-                        # Detectar cambio de jugador
-                        prev_player = st.session_state.get('prev_selected_player', None)
                         selected_name = st.selectbox("Player Name", ["Select..."] + sorted(player_names), key="player_select")
-                        
-                        # Si cambió el jugador, forzar rerun
-                        if selected_name != prev_player and selected_name != "Select...":
-                            st.session_state.prev_selected_player = selected_name
-                            st.rerun()
-                        
                         selected_number = None
                         
                         # Inicializar valores por defecto
@@ -252,12 +262,12 @@ with tab1:
                             except Exception as e:
                                 st.error(f"Error loading player data: {e}")
                         
-                        # Mostrar campos (todos editables)
-                        birth_date = st.text_input("Birth Date", value=birth_date_val, key="birth_date")
-                        height = st.text_input("Height", value=height_val, key="height")
-                        end_contract = st.text_input("End Contract", value=end_contract_val, key="end_contract")
-                        market_value = st.text_input("Market Value", value=market_value_val, key="market_value")
-                        position = st.text_input("Position", value=position_val, key="position")
+                        # Mostrar campos (todos editables) con valores únicos en keys
+                        birth_date = st.text_input("Birth Date", value=birth_date_val, key=f"birth_date_{selected_name}")
+                        height = st.text_input("Height", value=height_val, key=f"height_{selected_name}")
+                        end_contract = st.text_input("End Contract", value=end_contract_val, key=f"end_contract_{selected_name}")
+                        market_value = st.text_input("Market Value", value=market_value_val, key=f"market_value_{selected_name}")
+                        position = st.text_input("Position", value=position_val, key=f"position_{selected_name}")
                         
                         # Nationality como desplegable
                         nationality_index = 0
@@ -271,16 +281,7 @@ with tab1:
                         # Seleccionar por número
                         numbers = df_team['Number'].dropna().unique().tolist()
                         numbers = [int(n) if isinstance(n, (int, float)) and not pd.isna(n) else n for n in numbers]
-                        
-                        # Detectar cambio de jugador
-                        prev_number = st.session_state.get('prev_selected_number', None)
                         selected_number = st.selectbox("Number", ["Select..."] + sorted(numbers, key=lambda x: (isinstance(x, str), x)), key="number_select")
-                        
-                        # Si cambió el número, forzar rerun
-                        if selected_number != prev_number and selected_number != "Select...":
-                            st.session_state.prev_selected_number = selected_number
-                            st.rerun()
-                        
                         selected_name = None
                         
                         # Inicializar valores por defecto
@@ -302,10 +303,10 @@ with tab1:
                             except Exception as e:
                                 st.error(f"Error loading player data: {e}")
                         
-                        # Mostrar campos (todos editables)
-                        name = st.text_input("Name", value=name_val, key="name")
-                        position = st.text_input("Position", value=position_val, key="position")
-                        birth_date = st.text_input("Birth Date", value=birth_date_val, key="birth_date")
+                        # Mostrar campos (todos editables) con keys únicos
+                        name = st.text_input("Name", value=name_val, key=f"name_{selected_number}")
+                        position = st.text_input("Position", value=position_val, key=f"position_{selected_number}")
+                        birth_date = st.text_input("Birth Date", value=birth_date_val, key=f"birth_date_{selected_number}")
                         
                         # Nationality como desplegable
                         nationality_index = 0
@@ -500,7 +501,20 @@ with tab1:
                         st.rerun()
 
 with tab2:
-    st.header(f"View Match Reports - {category}")
+    # Mostrar icono de categoría
+    icon_file = CATEGORY_ICONS.get(category)
+    if icon_file and os.path.exists(icon_file):
+        col_icon, col_title = st.columns([1, 9])
+        with col_icon:
+            try:
+                icon = Image.open(icon_file)
+                st.image(icon, width=80)
+            except:
+                pass
+        with col_title:
+            st.header(f"View Match Reports - {category}")
+    else:
+        st.header(f"View Match Reports - {category}")
     
     # Cargar archivo de reportes según categoría
     report_file = CATEGORY_REPORT_FILES.get(category)
@@ -827,11 +841,37 @@ with tab2:
                                 st.write(report['Description'])
 
 with tab3:
-    st.header(f"Create Individual Report - {category}")
+    # Mostrar icono de categoría
+    icon_file = CATEGORY_ICONS.get(category)
+    if icon_file and os.path.exists(icon_file):
+        col_icon, col_title = st.columns([1, 9])
+        with col_icon:
+            try:
+                icon = Image.open(icon_file)
+                st.image(icon, width=80)
+            except:
+                pass
+        with col_title:
+            st.header(f"Create Individual Report - {category}")
+    else:
+        st.header(f"Create Individual Report - {category}")
     st.info("Coming soon...")
 
 with tab4:
-    st.header(f"View Individual Reports - {category}")
+    # Mostrar icono de categoría
+    icon_file = CATEGORY_ICONS.get(category)
+    if icon_file and os.path.exists(icon_file):
+        col_icon, col_title = st.columns([1, 9])
+        with col_icon:
+            try:
+                icon = Image.open(icon_file)
+                st.image(icon, width=80)
+            except:
+                pass
+        with col_title:
+            st.header(f"View Individual Reports - {category}")
+    else:
+        st.header(f"View Individual Reports - {category}")
     st.info("Coming soon...")
 
 with tab5:

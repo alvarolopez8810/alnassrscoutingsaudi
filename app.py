@@ -31,6 +31,9 @@ CATEGORY_ICONS = {
     "U18 PREMIER LEAGUE": "U18logo.png"
 }
 
+# Debug mode - Cambiar a True para ver mensajes de debug
+DEBUG_MODE = False
+
 # Lista de países del mundo
 COUNTRIES = [
     "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia",
@@ -227,6 +230,9 @@ with tab1:
                 # Filtrar por equipo seleccionado
                 df_team = df_filtered[df_filtered['Team'] == player_team]
                 
+                if DEBUG_MODE:
+                    st.info(f"🔍 DEBUG: Team={player_team}, Players found={len(df_team)}")
+                
                 col1, col2 = st.columns(2)
                 
                 with col1:
@@ -259,8 +265,13 @@ with tab1:
                                 position_val = str(player_data.get('Position', '')) if pd.notna(player_data.get('Position')) else ""
                                 nationality_val = str(player_data.get('Nationality', '')) if pd.notna(player_data.get('Nationality')) else ""
                                 agent_val = str(player_data.get('Agent', '')) if pd.notna(player_data.get('Agent')) and player_data.get('Agent') != '' else ""
+                                
+                                if DEBUG_MODE:
+                                    st.success(f"🔍 DEBUG PRO: Loaded {selected_name} - Position={position_val}, Birth={birth_date_val}")
                             except Exception as e:
-                                st.error(f"Error loading player data: {e}")
+                                st.error(f"❌ Error loading player data: {e}")
+                                if DEBUG_MODE:
+                                    st.error(f"🔍 DEBUG: Exception details: {str(e)}")
                         
                         # Mostrar campos (todos editables) con valores únicos en keys
                         birth_date = st.text_input("Birth Date", value=birth_date_val, key=f"birth_date_{selected_name}")
@@ -300,8 +311,13 @@ with tab1:
                                 birth_date_val = str(player_data.get('Birth Date', '')) if pd.notna(player_data.get('Birth Date')) else ""
                                 nationality_val = str(player_data.get('Nationality', '')) if pd.notna(player_data.get('Nationality')) else ""
                                 agent_val = str(player_data.get('Agent', '')) if pd.notna(player_data.get('Agent')) and player_data.get('Agent') != '' else ""
+                                
+                                if DEBUG_MODE:
+                                    st.success(f"🔍 DEBUG U21/U18: Number={selected_number}, Name={name_val}, Position={position_val}, Birth={birth_date_val}")
                             except Exception as e:
-                                st.error(f"Error loading player data: {e}")
+                                st.error(f"❌ Error loading player data: {e}")
+                                if DEBUG_MODE:
+                                    st.error(f"🔍 DEBUG: Exception details: {str(e)}")
                         
                         # Mostrar campos (todos editables) con keys únicos
                         name = st.text_input("Name", value=name_val, key=f"name_{selected_number}")
@@ -455,6 +471,9 @@ with tab1:
                 with col2:
                     if st.button("💾 Save Match Report", type="primary", use_container_width=True):
                         try:
+                            if DEBUG_MODE:
+                                st.info(f"🔍 DEBUG: Saving {len(st.session_state.players_list)} players")
+                            
                             # Crear DataFrame con los jugadores
                             report_df = pd.DataFrame(st.session_state.players_list)
                             
@@ -839,6 +858,20 @@ with tab2:
                             if 'Description' in report and pd.notna(report['Description']) and report['Description']:
                                 st.markdown("**📝 Description:**")
                                 st.write(report['Description'])
+                            
+                            # Botón para eliminar reporte
+                            st.markdown("---")
+                            if st.button(f"🗑️ Delete Report", key=f"delete_report_{idx}", type="secondary"):
+                                # Eliminar esta fila del DataFrame
+                                df_reports_updated = df_reports.drop(idx)
+                                
+                                # Guardar el archivo actualizado
+                                try:
+                                    df_reports_updated.to_excel(report_file, index=False, engine='openpyxl')
+                                    st.success(f"✅ Report deleted successfully!")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"❌ Error deleting report: {str(e)}")
 
 with tab3:
     # Mostrar icono de categoría

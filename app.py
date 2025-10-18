@@ -16,19 +16,19 @@ st.set_page_config(
 CATEGORY_DB_FILES = {
     "PRO LEAGUE": "dbproleague.xlsx",
     "SAUDI U21 LEAGUE": "dbsaudiu21.xlsx",
-    "U18 PREMIER LEAGUE": "dbsaudiu18.xlsx"
+    "U18 & U17 PREMIER LEAGUE": "dbu18_dbu17.xlsx"  # Nuevo archivo con sheets
 }
 
 CATEGORY_REPORT_FILES = {
     "PRO LEAGUE": "mreportsproleague.xlsx",
     "SAUDI U21 LEAGUE": "mreportsu21.xlsx",
-    "U18 PREMIER LEAGUE": "mreportsu18.xlsx"
+    "U18 & U17 PREMIER LEAGUE": "mreportsu18.xlsx"
 }
 
 CATEGORY_ICONS = {
     "PRO LEAGUE": "Senior1DIV.png",
     "SAUDI U21 LEAGUE": "U21logo.png",
-    "U18 PREMIER LEAGUE": "U18logo.png"
+    "U18 & U17 PREMIER LEAGUE": "U18logo.png"
 }
 
 # Debug mode - Cambiar a True para ver mensajes de debug
@@ -123,7 +123,7 @@ st.sidebar.markdown("---")
 # Selector de categoría
 category = st.sidebar.radio(
     "Select Category",
-    ["PRO LEAGUE", "SAUDI U21 LEAGUE", "U18 PREMIER LEAGUE"]
+    ["PRO LEAGUE", "SAUDI U21 LEAGUE", "U18 & U17 PREMIER LEAGUE"]
 )
 
 # Pestañas principales
@@ -156,7 +156,13 @@ with tab1:
     if not db_file or not os.path.exists(db_file):
         st.error(f"Database file not found: {db_file}")
     else:
-        df = pd.read_excel(db_file)
+        # Para U18 & U17, cargar ambas sheets y combinarlas
+        if category == "U18 & U17 PREMIER LEAGUE":
+            df_u18 = pd.read_excel(db_file, sheet_name="dbu18league")
+            df_u17 = pd.read_excel(db_file, sheet_name="dbu17league")
+            df = pd.concat([df_u18, df_u17], ignore_index=True)
+        else:
+            df = pd.read_excel(db_file)
         
         # Inicializar session state para jugadores
         if 'players_list' not in st.session_state:
@@ -175,8 +181,11 @@ with tab1:
         
         # Filtrar equipos por liga seleccionada
         if selected_league and selected_league != "Select...":
-            df_league = df[df['League'] == selected_league]
-            teams = df_league['Team'].dropna().unique().tolist()
+            if 'League' in df.columns:
+                df_league = df[df['League'] == selected_league]
+                teams = df_league['Team'].dropna().unique().tolist()
+            else:
+                teams = df['Team'].dropna().unique().tolist() if 'Team' in df.columns else []
         else:
             teams = []
         
@@ -934,16 +943,24 @@ with tab5:
     """, unsafe_allow_html=True)
     
     # Sub-pestañas para las categorías
-    db_tab1, db_tab2, db_tab3 = st.tabs(["⚽ PRO LEAGUE", "🎯 U21", "🌟 U18"])
+    db_tab1, db_tab2, db_tab3, db_tab4, db_tab5 = st.tabs(["⚽ PRO LEAGUE", "🎯 U21", "🌟 U18", "⭐ U17", "🔄 U18-U17 Combined"])
     
     # Función para mostrar base de datos
-    def show_database(db_category, db_file):
+    def show_database(db_category, db_file, sheet_name=None, combine_sheets=False):
         if not os.path.exists(db_file):
             st.error(f"Database file not found: {db_file}")
             return
         
-        # Cargar datos
-        df_db = pd.read_excel(db_file)
+        # Cargar datos (con sheet si se especifica)
+        if combine_sheets:
+            # Combinar ambas sheets
+            df_u18 = pd.read_excel(db_file, sheet_name="dbu18league")
+            df_u17 = pd.read_excel(db_file, sheet_name="dbu17league")
+            df_db = pd.concat([df_u18, df_u17], ignore_index=True)
+        elif sheet_name:
+            df_db = pd.read_excel(db_file, sheet_name=sheet_name)
+        else:
+            df_db = pd.read_excel(db_file)
         
         if df_db.empty:
             st.info("No players in database.")
@@ -979,36 +996,106 @@ with tab5:
         for col in common_filters:
             if col in all_cols:
                 with filter_cols[col_idx % 4]:
-                    # Obtener valores únicos del DataFrame temporal (ya filtrado)
-                    unique_vals = df_temp[col].dropna().unique().tolist()
-                    if len(unique_vals) > 0:
-                        # Para Number y Birth Date, ordenar numéricamente
-                        if col in ['Number', 'Birth Date']:
-                            try:
-                                sorted_vals = sorted(unique_vals, key=lambda x: int(x) if str(x).isdigit() else 0)
-                            except:
-                                sorted_vals = sorted(unique_vals)
-                        else:
-                            sorted_vals = sorted(unique_vals)
-                        filters[col] = st.selectbox(f"{col}", ["All"] + sorted_vals, key=f"filter_{db_category}_{col}")
+                    # Birth Date como slider de años
+                    if col == 'Birth Date':
+                        # Extraer años (primeros 4 dígitos)
+                        years = []
+                        for val in df_temp[col].dropna():
+                            year_str = str(val)[:4]
+                            if year_str.isdigit():
+                                years.append(int(year_str))
                         
-                        # Aplicar filtro inmediatamente para que afecte a los siguientes
-                        if filters[col] != "All":
-                            df_temp = df_temp[df_temp[col].astype(str) == str(filters[col])]
+                        if years:
+                            min_year = min(years)
+                            max_year = max(years)
+                            selected_range = st.slider(
+                                "Birth Year",
+                                min_value=min_year,
+                                max_value=max_year,
+                                value=(min_year, max_year),
+                                key=f"filter_{db_category}_birth_year"
+                            )
+                            filters['Birth Date'] = selected_range
+                            
+                            # Aplicar filtro de rango de años
+                            df_temp = df_temp[df_temp[col].apply(
+                                lambda x: selected_range[0] <= int(str(x)[:4]) <= selected_range[1] 
+                                if pd.notna(x) and str(x)[:4].isdigit() else False
+                            )]
+                    else:
+                        # Obtener valores únicos del DataFrame temporal (ya filtrado)
+                        unique_vals = df_temp[col].dropna().unique().tolist()
+                        if len(unique_vals) > 0:
+                            # Para Number, ordenar numéricamente
+                            if col == 'Number':
+                                try:
+                                    sorted_vals = sorted(unique_vals, key=lambda x: int(x) if str(x).isdigit() else 0)
+                                except:
+                                    sorted_vals = sorted(unique_vals)
+                            else:
+                                sorted_vals = sorted(unique_vals)
+                            filters[col] = st.selectbox(f"{col}", ["All"] + sorted_vals, key=f"filter_{db_category}_{col}")
+                            
+                            # Aplicar filtro inmediatamente para que afecte a los siguientes
+                            if filters[col] != "All":
+                                df_temp = df_temp[df_temp[col].astype(str) == str(filters[col])]
                 col_idx += 1
         
         # Filtros adicionales
         st.markdown("#### Additional Filters")
-        filter_cols2 = st.columns(4)
         
-        additional_cols = [c for c in all_cols if c not in common_filters and c not in ['Name']]
+        # Slider de Minutes (si existe)
+        if 'Minutes' in all_cols:
+            minutes_vals = df_db['Minutes'].dropna()
+            if len(minutes_vals) > 0:
+                try:
+                    minutes_vals = [float(x) for x in minutes_vals if str(x).replace('.','').replace('-','').isdigit()]
+                    if minutes_vals:
+                        min_minutes = int(min(minutes_vals))
+                        max_minutes = int(max(minutes_vals))
+                        selected_minutes = st.slider(
+                            "Minutes",
+                            min_value=min_minutes,
+                            max_value=max_minutes,
+                            value=(min_minutes, max_minutes),
+                            key=f"filter_{db_category}_minutes"
+                        )
+                        filters['Minutes'] = selected_minutes
+                except:
+                    pass
         
-        for idx, col in enumerate(additional_cols[:8]):  # Máximo 8 filtros adicionales
-            with filter_cols2[idx % 4]:
-                if df_db[col].dtype in ['object', 'string']:
+        filter_cols2 = st.columns(5)
+        
+        # Filtros específicos para U18/U17
+        priority_filters = ['M_Played', 'M_Starter', 'M_Sub', 'Goals', 'Cards']
+        
+        col_idx2 = 0
+        for col in priority_filters:
+            if col in all_cols:
+                with filter_cols2[col_idx2 % 5]:
                     unique_vals = df_db[col].dropna().unique().tolist()
-                    if len(unique_vals) > 0 and len(unique_vals) < 50:  # Solo si hay menos de 50 valores únicos
-                        filters[col] = st.selectbox(f"{col}", ["All"] + sorted([str(v) for v in unique_vals]), key=f"filter_{db_category}_{col}_add")
+                    if len(unique_vals) > 0:
+                        try:
+                            # Ordenar numéricamente
+                            sorted_vals = sorted(unique_vals, key=lambda x: float(x) if str(x).replace('.','').isdigit() else 0)
+                        except:
+                            sorted_vals = sorted(unique_vals)
+                        filters[col] = st.selectbox(f"{col}", ["All"] + [str(v) for v in sorted_vals], key=f"filter_{db_category}_{col}_priority")
+                col_idx2 += 1
+        
+        # Otros filtros adicionales (excluyendo los ya mostrados)
+        additional_cols = [c for c in all_cols if c not in common_filters and c not in priority_filters and c not in ['Name']]
+        
+        if additional_cols:
+            st.markdown("#### Other Filters")
+            filter_cols3 = st.columns(4)
+            
+            for idx, col in enumerate(additional_cols[:8]):  # Máximo 8 filtros adicionales
+                with filter_cols3[idx % 4]:
+                    if df_db[col].dtype in ['object', 'string']:
+                        unique_vals = df_db[col].dropna().unique().tolist()
+                        if len(unique_vals) > 0 and len(unique_vals) < 50:  # Solo si hay menos de 50 valores únicos
+                            filters[col] = st.selectbox(f"{col}", ["All"] + sorted([str(v) for v in unique_vals]), key=f"filter_{db_category}_{col}_add")
         
         # Aplicar filtros
         df_filtered = df_db.copy()
@@ -1021,7 +1108,23 @@ with tab5:
         # Aplicar filtros específicos
         for col, value in filters.items():
             if value and value != "All":
-                df_filtered = df_filtered[df_filtered[col].astype(str) == str(value)]
+                # Si es un rango (tuple), aplicar filtro de rango
+                if isinstance(value, tuple):
+                    if col == 'Birth Date':
+                        # Filtro de año de nacimiento
+                        df_filtered = df_filtered[df_filtered[col].apply(
+                            lambda x: value[0] <= int(str(x)[:4]) <= value[1] 
+                            if pd.notna(x) and str(x)[:4].isdigit() else False
+                        )]
+                    elif col == 'Minutes':
+                        # Filtro de minutos
+                        df_filtered = df_filtered[df_filtered[col].apply(
+                            lambda x: value[0] <= float(x) <= value[1] 
+                            if pd.notna(x) and str(x).replace('.','').replace('-','').isdigit() else False
+                        )]
+                else:
+                    # Filtro normal
+                    df_filtered = df_filtered[df_filtered[col].astype(str) == str(value)]
         
         # Mostrar resultados
         st.markdown("---")
@@ -1098,4 +1201,10 @@ with tab5:
         show_database("SAUDI U21 LEAGUE", CATEGORY_DB_FILES["SAUDI U21 LEAGUE"])
     
     with db_tab3:
-        show_database("U18 PREMIER LEAGUE", CATEGORY_DB_FILES["U18 PREMIER LEAGUE"])
+        show_database("U18 PREMIER LEAGUE", CATEGORY_DB_FILES["U18 & U17 PREMIER LEAGUE"], sheet_name="dbu18league")
+    
+    with db_tab4:
+        show_database("U17 PREMIER LEAGUE", CATEGORY_DB_FILES["U18 & U17 PREMIER LEAGUE"], sheet_name="dbu17league")
+    
+    with db_tab5:
+        show_database("U18-U17 COMBINED", CATEGORY_DB_FILES["U18 & U17 PREMIER LEAGUE"], sheet_name="Ambas_Ligas")

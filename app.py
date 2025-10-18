@@ -142,11 +142,24 @@ if st.sidebar.button("Logout"):
 
 st.sidebar.markdown("---")
 
-# Selector de categoría
+# Selector de categoría con session state para evitar reinicios
+if 'current_category' not in st.session_state:
+    st.session_state.current_category = "PRO LEAGUE"
+
 category = st.sidebar.radio(
     "Select Category",
-    ["PRO LEAGUE", "SAUDI U21 LEAGUE", "U18 & U17 PREMIER LEAGUE"]
+    ["PRO LEAGUE", "SAUDI U21 LEAGUE", "U18 & U17 PREMIER LEAGUE"],
+    index=["PRO LEAGUE", "SAUDI U21 LEAGUE", "U18 & U17 PREMIER LEAGUE"].index(st.session_state.current_category),
+    key="category_selector"
 )
+
+# Detectar cambio de categoría y limpiar estados relacionados
+if category != st.session_state.current_category:
+    st.session_state.current_category = category
+    # Limpiar estados que pueden causar conflictos
+    keys_to_clear = [k for k in st.session_state.keys() if k.startswith(('show_player_form', 'selected_team_for_player', 'players_list'))]
+    for key in keys_to_clear:
+        del st.session_state[key]
 
 # Pestañas principales
 tab1, tab2, tab3, tab4 = st.tabs([
@@ -330,9 +343,9 @@ with tab1:
                         nationality_index = 0
                         if nationality_val and nationality_val in COUNTRIES:
                             nationality_index = COUNTRIES.index(nationality_val) + 1
-                        nationality = st.selectbox("Nationality", ["Select..."] + COUNTRIES, index=nationality_index, key="nationality")
+                        nationality = st.selectbox("Nationality", ["Select..."] + COUNTRIES, index=nationality_index, key=f"nationality_{selected_name}")
                         
-                        agent = st.text_input("Agent", value=agent_val, key="agent")
+                        agent = st.text_input("Agent", value=agent_val, key=f"agent_{selected_name}")
                     
                     else:  # U21 o U18
                         # Seleccionar por número
@@ -352,7 +365,15 @@ with tab1:
                         # Obtener datos del jugador si se seleccionó uno
                         if selected_number and selected_number != "Select...":
                             try:
+                                if DEBUG_MODE:
+                                    st.info(f"🔍 DEBUG: Columns in df_team: {df_team.columns.tolist()}")
+                                    st.info(f"🔍 DEBUG: Looking for Number={selected_number}")
+                                
                                 player_data = df_team[df_team['Number'] == selected_number].iloc[0]
+                                
+                                if DEBUG_MODE:
+                                    st.info(f"🔍 DEBUG: Player data found: {player_data.to_dict()}")
+                                
                                 name_val = str(player_data.get('Name', '')) if pd.notna(player_data.get('Name')) else ""
                                 position_val = str(player_data.get('Position', '')) if pd.notna(player_data.get('Position')) else ""
                                 sec_position_val = str(player_data.get('Sec. Position', '')) if pd.notna(player_data.get('Sec. Position')) else ""
@@ -361,7 +382,7 @@ with tab1:
                                 agent_val = str(player_data.get('Agent', '')) if pd.notna(player_data.get('Agent')) and player_data.get('Agent') != '' else ""
                                 
                                 if DEBUG_MODE:
-                                    st.success(f"🔍 DEBUG U21/U18: Number={selected_number}, Name={name_val}, Position={position_val}, Birth={birth_date_val}")
+                                    st.success(f"🔍 DEBUG U21/U18: Number={selected_number}, Name={name_val}, Position={position_val}, Nationality={nationality_val}, Birth={birth_date_val}")
                             except Exception as e:
                                 st.error(f"❌ Error loading player data: {e}")
                                 if DEBUG_MODE:
@@ -388,9 +409,9 @@ with tab1:
                         nationality_index = 0
                         if nationality_val and nationality_val in COUNTRIES:
                             nationality_index = COUNTRIES.index(nationality_val) + 1
-                        nationality = st.selectbox("Nationality", ["Select..."] + COUNTRIES, index=nationality_index, key="nationality")
+                        nationality = st.selectbox("Nationality", ["Select..."] + COUNTRIES, index=nationality_index, key=f"nationality_{selected_number}")
                         
-                        agent = st.text_input("Agent", value=agent_val, key="agent")
+                        agent = st.text_input("Agent", value=agent_val, key=f"agent_{selected_number}")
                 
                 with col2:
                     st.markdown("### Evaluation")
@@ -1883,18 +1904,51 @@ with tab4:
             if not selected_cols:
                 selected_cols = all_columns
             
-            # Configurar la tabla
-            # Convertir todas las columnas a string para evitar errores de tipo
+            # Configurar la tabla EDITABLE
             df_display = df_filtered[selected_cols].copy()
-            for col in df_display.columns:
-                df_display[col] = df_display[col].astype(str)
             
-            st.dataframe(
+            # Usar data_editor para hacer la tabla editable
+            edited_df = st.data_editor(
                 df_display,
                 use_container_width=True,
                 height=600,
-                hide_index=True
+                hide_index=True,
+                num_rows="dynamic",  # Permite añadir/eliminar filas
+                key=f"editor_{db_category}"
             )
+            
+            # Botón para guardar cambios
+            if st.button("💾 Save Changes to Database", type="primary", use_container_width=True, key=f"save_{db_category}"):
+                try:
+                    # Actualizar el DataFrame original con los cambios
+                    for col in selected_cols:
+                        if col in df_filtered.columns and col in edited_df.columns:
+                            df_filtered[col] = edited_df[col]
+                    
+                    # Actualizar el DataFrame completo
+                    for idx in df_filtered.index:
+                        if idx in df_db.index:
+                            for col in selected_cols:
+                                if col in df_filtered.columns:
+                                    df_db.at[idx, col] = df_filtered.at[idx, col]
+                    
+                    # Guardar en Excel
+                    if combine_sheets:
+                        # Para U18-U17 Combined, necesitamos separar y guardar en ambas sheets
+                        st.warning("Cannot save combined view. Please edit U18 or U17 separately.")
+                    elif sheet_name:
+                        # Guardar en sheet específica
+                        with pd.ExcelWriter(db_file, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                            df_db.to_excel(writer, sheet_name=sheet_name, index=False)
+                        st.success(f"✅ Changes saved to {sheet_name}!")
+                        st.rerun()
+                    else:
+                        # Guardar archivo completo
+                        df_db.to_excel(db_file, index=False, engine='openpyxl')
+                        st.success(f"✅ Changes saved to database!")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Error saving changes: {str(e)}")
             
             # Botones de descarga
             st.markdown("### 📥 Export Data")

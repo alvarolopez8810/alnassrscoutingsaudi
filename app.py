@@ -697,8 +697,8 @@ with tab1:
                 with col2:
                     if st.button("💾 Save Match Report", type="primary", use_container_width=True):
                         try:
-                            if DEBUG_MODE:
-                                st.info(f"🔍 DEBUG: Saving {len(st.session_state.players_list)} players")
+                            st.info(f"🔄 Saving report for user: {scout}")
+                            st.info(f"📊 Players to save: {len(st.session_state.players_list)}")
                             
                             # Crear DataFrame con los jugadores
                             report_df = pd.DataFrame(st.session_state.players_list)
@@ -712,32 +712,50 @@ with tab1:
                             
                             # Guardar en Excel
                             report_file = CATEGORY_REPORT_FILES.get(category)
+                            st.info(f"📁 Target file: {report_file}")
                             
+                            # Verificar si el archivo existe y es accesible
                             if os.path.exists(report_file):
+                                st.info(f"✅ File exists, loading existing data...")
                                 # Cargar existente y añadir
                                 try:
                                     existing_df = pd.read_excel(report_file)
+                                    st.info(f"📊 Existing reports: {len(existing_df)}")
                                     final_df = pd.concat([existing_df, report_df], ignore_index=True)
+                                    st.info(f"📊 Total reports after merge: {len(final_df)}")
                                 except Exception as e:
-                                    st.warning(f"Could not load existing file: {e}. Creating new file.")
+                                    st.warning(f"⚠️ Could not load existing file: {e}. Creating new file.")
                                     final_df = report_df
                             else:
+                                st.info(f"📄 File does not exist, creating new file...")
                                 final_df = report_df
                             
                             # Guardar con openpyxl
+                            st.info(f"💾 Saving to Excel...")
                             final_df.to_excel(report_file, index=False, engine='openpyxl')
                             
-                            st.success(f"✅ Match report saved successfully!")
-                            st.info(f"📁 Saved to: {report_file}")
-                            st.balloons()
-                            
-                            # Limpiar lista
-                            st.session_state.players_list = []
-                            st.session_state.show_player_form = False
-                            st.rerun()
+                            # Verificar que se guardó correctamente
+                            if os.path.exists(report_file):
+                                verify_df = pd.read_excel(report_file)
+                                st.success(f"✅ Match report saved successfully!")
+                                st.success(f"✅ Verified: {len(verify_df)} total reports in file")
+                                st.info(f"📁 Saved to: {report_file}")
+                                st.balloons()
+                                
+                                # Limpiar lista
+                                st.session_state.players_list = []
+                                st.session_state.show_player_form = False
+                                st.rerun()
+                            else:
+                                st.error(f"❌ File was not created. Check permissions.")
+                        except PermissionError as e:
+                            st.error(f"❌ Permission Error: {str(e)}")
+                            st.error(f"🔒 The file may be open in another program (Excel). Please close it and try again.")
                         except Exception as e:
                             st.error(f"❌ Error saving report: {str(e)}")
-                            st.error(f"Please check file permissions and try again.")
+                            st.error(f"📋 Error type: {type(e).__name__}")
+                            import traceback
+                            st.error(f"🔍 Full error: {traceback.format_exc()}")
                 
                 with col3:
                     if st.button("🗑️ Clear All", use_container_width=True):

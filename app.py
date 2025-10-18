@@ -1224,7 +1224,14 @@ with tab3:
                         player_position = first_report.get('Position', 'N/A')
                         player_sec_position = first_report.get('Sec. Position', '')
                         player_birth = str(first_report.get('Birth Date', ''))[:4] if pd.notna(first_report.get('Birth Date')) else 'N/A'
-                        player_nationality = first_report.get('Nationality', 'N/A')
+                        
+                        # Nationality con manejo robusto
+                        nationality_value = first_report.get('Nationality', 'N/A')
+                        if pd.isna(nationality_value) or str(nationality_value).strip() == '' or str(nationality_value) == 'nan':
+                            player_nationality = 'N/A'
+                        else:
+                            player_nationality = str(nationality_value)
+                        
                         player_number = first_report.get('Number', '')
                         
                         # HEADER CON FOTO
@@ -1374,6 +1381,12 @@ with tab3:
                             watch_method = report.get('Watch', 'N/A')
                             watch_icon = "📺" if "TV" in str(watch_method) else "🏟️"
                             
+                            # Extraer Performance
+                            performance = report.get('Performance', 'N/A')
+                            perf_level = '?'
+                            if 'LEVEL' in str(performance):
+                                perf_level = str(performance).split(' - ')[0].replace('LEVEL ', '')
+                            
                             # Iniciales del scout
                             initials = ''.join([word[0].upper() for word in scout_name.split()[:2]])
                             
@@ -1386,7 +1399,7 @@ with tab3:
                                     </div>
                                     <div>
                                         <div style="font-weight: 600; font-size: 16px; color: #1a2332;">{scout_name}</div>
-                                        <div style="font-size: 12px; color: #666;">{match_info} • {date} • {watch_icon} {watch_method}</div>
+                                        <div style="font-size: 12px; color: #666;">{match_info} • {date} • {watch_icon} {watch_method} • ⭐ Performance: {perf_level}</div>
                                     </div>
                                 </div>
                                 <div style="font-size: 14px; line-height: 1.6; color: #333; padding-left: 65px;">

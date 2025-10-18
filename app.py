@@ -248,15 +248,31 @@ with tab1:
             
             with col_home:
                 st.subheader(f"🏠 {home_team}")
-                if st.button("➕ Add Player", key="add_home", type="primary", use_container_width=True):
-                    st.session_state.show_player_form = True
-                    st.session_state.selected_team_for_player = home_team
+                col_h1, col_h2 = st.columns(2)
+                with col_h1:
+                    if st.button("➕ Add Player", key="add_home", type="primary", use_container_width=True):
+                        st.session_state.show_player_form = True
+                        st.session_state.selected_team_for_player = home_team
+                        st.session_state.add_new_player = False
+                with col_h2:
+                    if st.button("👤 Add New Player", key="add_new_home", use_container_width=True):
+                        st.session_state.show_player_form = True
+                        st.session_state.selected_team_for_player = home_team
+                        st.session_state.add_new_player = True
             
             with col_away:
                 st.subheader(f"✈️ {away_team}")
-                if st.button("➕ Add Player", key="add_away", type="primary", use_container_width=True):
-                    st.session_state.show_player_form = True
-                    st.session_state.selected_team_for_player = away_team
+                col_a1, col_a2 = st.columns(2)
+                with col_a1:
+                    if st.button("➕ Add Player", key="add_away", type="primary", use_container_width=True):
+                        st.session_state.show_player_form = True
+                        st.session_state.selected_team_for_player = away_team
+                        st.session_state.add_new_player = False
+                with col_a2:
+                    if st.button("👤 Add New Player", key="add_new_away", use_container_width=True):
+                        st.session_state.show_player_form = True
+                        st.session_state.selected_team_for_player = away_team
+                        st.session_state.add_new_player = True
             
             # Filtrar jugadores por equipos seleccionados (desde df_league si existe, sino desde df)
             if selected_league and selected_league != "Select..." and 'League' in df.columns:
@@ -267,7 +283,15 @@ with tab1:
             # Mostrar formulario de jugador
             if st.session_state.get('show_player_form', False):
                 st.markdown("---")
-                st.subheader("Add Player to Report")
+                
+                # Detectar si es nuevo jugador
+                is_new_player = st.session_state.get('add_new_player', False)
+                
+                if is_new_player:
+                    st.subheader("👤 Add New Player to Database & Report")
+                    st.warning("⚠️ This will create a new player in the database and add a match report")
+                else:
+                    st.subheader("Add Player to Report")
                 
                 # Usar el equipo seleccionado desde el botón
                 player_team = st.session_state.get('selected_team_for_player', home_team)
@@ -277,7 +301,7 @@ with tab1:
                 df_team = df_filtered[df_filtered['Team'] == player_team]
                 
                 if DEBUG_MODE:
-                    st.info(f"🔍 DEBUG: Team={player_team}, Players found={len(df_team)}")
+                    st.info(f"🔍 DEBUG: Team={player_team}, Players found={len(df_team)}, New Player={is_new_player}")
                 
                 col1, col2 = st.columns(2)
                 
@@ -286,10 +310,15 @@ with tab1:
                     
                     # PRO LEAGUE usa Name, U21/U18 usan Number
                     if category == "PRO LEAGUE":
-                        # Seleccionar por nombre
-                        player_names = df_team['Name'].dropna().unique().tolist()
-                        selected_name = st.selectbox("Player Name", ["Select..."] + sorted(player_names), key="player_select")
-                        selected_number = None
+                        if is_new_player:
+                            # Campo de texto para nuevo jugador
+                            selected_name = st.text_input("Player Name *", key="new_player_name", placeholder="Enter full name")
+                            selected_number = None
+                        else:
+                            # Seleccionar por nombre
+                            player_names = df_team['Name'].dropna().unique().tolist()
+                            selected_name = st.selectbox("Player Name", ["Select..."] + sorted(player_names), key="player_select")
+                            selected_number = None
                         
                         # Inicializar valores por defecto
                         birth_date_val = ""
@@ -301,8 +330,8 @@ with tab1:
                         nationality_val = ""
                         agent_val = ""
                         
-                        # Obtener datos del jugador si se seleccionó uno
-                        if selected_name and selected_name != "Select...":
+                        # Obtener datos del jugador si se seleccionó uno (solo si NO es nuevo jugador)
+                        if not is_new_player and selected_name and selected_name != "Select...":
                             try:
                                 player_data = df_team[df_team['Name'] == selected_name].iloc[0]
                                 birth_date_val = str(player_data.get('Birth Date', '')) if pd.notna(player_data.get('Birth Date')) else ""
@@ -348,11 +377,16 @@ with tab1:
                         agent = st.text_input("Agent", value=agent_val, key=f"agent_{selected_name}")
                     
                     else:  # U21 o U18
-                        # Seleccionar por número
-                        numbers = df_team['Number'].dropna().unique().tolist()
-                        numbers = [int(n) if isinstance(n, (int, float)) and not pd.isna(n) else n for n in numbers]
-                        selected_number = st.selectbox("Number", ["Select..."] + sorted(numbers, key=lambda x: (isinstance(x, str), x)), key="number_select")
-                        selected_name = None
+                        if is_new_player:
+                            # Campo numérico para nuevo jugador
+                            selected_number = st.number_input("Number *", min_value=1, max_value=99, step=1, key="new_player_number")
+                            selected_name = None
+                        else:
+                            # Seleccionar por número
+                            numbers = df_team['Number'].dropna().unique().tolist()
+                            numbers = [int(n) if isinstance(n, (int, float)) and not pd.isna(n) else n for n in numbers]
+                            selected_number = st.selectbox("Number", ["Select..."] + sorted(numbers, key=lambda x: (isinstance(x, str), x)), key="number_select")
+                            selected_name = None
                         
                         # Inicializar valores por defecto
                         name_val = ""
@@ -362,8 +396,8 @@ with tab1:
                         nationality_val = ""
                         agent_val = ""
                         
-                        # Obtener datos del jugador si se seleccionó uno
-                        if selected_number and selected_number != "Select...":
+                        # Obtener datos del jugador si se seleccionó uno (solo si NO es nuevo jugador)
+                        if not is_new_player and selected_number and selected_number != "Select...":
                             try:
                                 if DEBUG_MODE:
                                     st.info(f"🔍 DEBUG: Columns in df_team: {df_team.columns.tolist()}")
@@ -474,54 +508,165 @@ with tab1:
                 if submit_btn:
                         # Validar que se hayan seleccionado todos los campos
                         if category == "PRO LEAGUE":
-                            if not selected_name or selected_name == "Select..." or performance == "Select..." or watch == "Select..." or profile == "Select..." or decision == "Select...":
-                                st.error("Please fill all required fields")
+                            if is_new_player:
+                                # Validación para nuevo jugador
+                                if not selected_name or position == "Select..." or nationality == "Select..." or performance == "Select..." or watch == "Select..." or profile == "Select..." or decision == "Select...":
+                                    st.error("Please fill all required fields (Name, Position, Nationality, Performance, Watch, Profile, Decision)")
+                                else:
+                                    # Guardar nuevo jugador en la base de datos
+                                    try:
+                                        new_player_data = {
+                                            'Team': player_team,
+                                            'Name': selected_name,
+                                            'Birth Date': birth_date,
+                                            'Heigh': height,
+                                            'End Contract': end_contract,
+                                            'Market Value': market_value,
+                                            'Position': position,
+                                            'Sec. Position': sec_position if sec_position != "Select..." else '',
+                                            'Nationality': nationality if nationality != "Select..." else '',
+                                            'Agent': agent if agent else '',
+                                            'League': selected_league if selected_league != "Select..." else category
+                                        }
+                                        
+                                        # Cargar base de datos y añadir jugador
+                                        df_db = pd.read_excel(db_file)
+                                        df_db = pd.concat([df_db, pd.DataFrame([new_player_data])], ignore_index=True)
+                                        df_db.to_excel(db_file, index=False, engine='openpyxl')
+                                        
+                                        st.success(f"✅ {selected_name} added to database!")
+                                        
+                                        # Ahora agregar al reporte
+                                        player_info = {
+                                            'Team': player_team,
+                                            'Name': selected_name,
+                                            'Birth Date': birth_date,
+                                            'Height': height,
+                                            'End Contract': end_contract,
+                                            'Market Value': market_value,
+                                            'Position': position,
+                                            'Sec. Position': sec_position if sec_position != "Select..." else '',
+                                            'Nationality': nationality,
+                                            'Agent': agent if agent else 'N/A',
+                                            'Performance': performance,
+                                            'Watch': watch,
+                                            'Profile': profile,
+                                            'Decision': decision,
+                                            'Description': description
+                                        }
+                                        st.session_state.players_list.append(player_info)
+                                        st.session_state.show_player_form = False
+                                        st.success(f"✅ {selected_name} added to report!")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ Error saving to database: {str(e)}")
                             else:
-                                # Agregar jugador a la lista (usando valores editados)
-                                player_info = {
-                                    'Team': player_team,
-                                    'Name': selected_name,
-                                    'Birth Date': birth_date,
-                                    'Height': height,
-                                    'End Contract': end_contract,
-                                    'Market Value': market_value,
-                                    'Position': position,
-                                    'Sec. Position': sec_position if sec_position != "Select..." else '',
-                                    'Nationality': nationality,
-                                    'Agent': agent if agent else 'N/A',
-                                    'Performance': performance,
-                                    'Watch': watch,
-                                    'Profile': profile,
-                                    'Decision': decision,
-                                    'Description': description
-                                }
-                                st.session_state.players_list.append(player_info)
-                                st.session_state.show_player_form = False
-                                st.success(f"✅ {selected_name} added to report!")
-                                st.rerun()
+                                # Jugador existente
+                                if not selected_name or selected_name == "Select..." or performance == "Select..." or watch == "Select..." or profile == "Select..." or decision == "Select...":
+                                    st.error("Please fill all required fields")
+                                else:
+                                    # Agregar jugador a la lista (usando valores editados)
+                                    player_info = {
+                                        'Team': player_team,
+                                        'Name': selected_name,
+                                        'Birth Date': birth_date,
+                                        'Height': height,
+                                        'End Contract': end_contract,
+                                        'Market Value': market_value,
+                                        'Position': position,
+                                        'Sec. Position': sec_position if sec_position != "Select..." else '',
+                                        'Nationality': nationality,
+                                        'Agent': agent if agent else 'N/A',
+                                        'Performance': performance,
+                                        'Watch': watch,
+                                        'Profile': profile,
+                                        'Decision': decision,
+                                        'Description': description
+                                    }
+                                    st.session_state.players_list.append(player_info)
+                                    st.session_state.show_player_form = False
+                                    st.success(f"✅ {selected_name} added to report!")
+                                    st.rerun()
                         else:  # U21 o U18
-                            if not selected_number or selected_number == "Select..." or performance == "Select..." or watch == "Select..." or decision == "Select...":
-                                st.error("Please fill all required fields")
+                            if is_new_player:
+                                # Validación para nuevo jugador
+                                if not selected_number or not name or position == "Select..." or nationality == "Select..." or performance == "Select..." or watch == "Select..." or decision == "Select...":
+                                    st.error("Please fill all required fields (Number, Name, Position, Nationality, Performance, Watch, Decision)")
+                                else:
+                                    # Guardar nuevo jugador en la base de datos
+                                    try:
+                                        new_player_data = {
+                                            'Team': player_team,
+                                            'Number': int(selected_number),
+                                            'Name': name,
+                                            'Position': position,
+                                            'Sec. Position': sec_position if sec_position != "Select..." else '',
+                                            'Birth Date': birth_date,
+                                            'Nationality': nationality if nationality != "Select..." else '',
+                                            'Agent': agent if agent else '',
+                                            'League': selected_league if selected_league != "Select..." else category
+                                        }
+                                        
+                                        # Cargar base de datos y añadir jugador
+                                        if category == "U18 & U17 PREMIER LEAGUE":
+                                            # Determinar sheet según la liga
+                                            sheet_name = "dbu18league" if "U18" in str(selected_league) else "dbu17league"
+                                            df_db = pd.read_excel(db_file, sheet_name=sheet_name)
+                                            df_db = pd.concat([df_db, pd.DataFrame([new_player_data])], ignore_index=True)
+                                            with pd.ExcelWriter(db_file, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+                                                df_db.to_excel(writer, sheet_name=sheet_name, index=False)
+                                        else:
+                                            df_db = pd.read_excel(db_file)
+                                            df_db = pd.concat([df_db, pd.DataFrame([new_player_data])], ignore_index=True)
+                                            df_db.to_excel(db_file, index=False, engine='openpyxl')
+                                        
+                                        st.success(f"✅ {name} added to database!")
+                                        
+                                        # Ahora agregar al reporte
+                                        player_info = {
+                                            'Team': player_team,
+                                            'Number': selected_number,
+                                            'Name': name,
+                                            'Position': position,
+                                            'Sec. Position': sec_position if sec_position != "Select..." else '',
+                                            'Birth Date': birth_date,
+                                            'Nationality': nationality,
+                                            'Agent': agent if agent else 'N/A',
+                                            'Performance': performance,
+                                            'Watch': watch,
+                                            'Decision': decision,
+                                            'Description': description
+                                        }
+                                        st.session_state.players_list.append(player_info)
+                                        st.session_state.show_player_form = False
+                                        st.success(f"✅ {name} added to report!")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ Error saving to database: {str(e)}")
                             else:
-                                # Agregar jugador a la lista (usando valores editados)
-                                player_info = {
-                                    'Team': player_team,
-                                    'Number': selected_number,
-                                    'Name': name,
-                                    'Position': position,
-                                    'Sec. Position': sec_position if sec_position != "Select..." else '',
-                                    'Birth Date': birth_date,
-                                    'Nationality': nationality,
-                                    'Agent': agent if agent else 'N/A',
-                                    'Performance': performance,
-                                    'Watch': watch,
-                                    'Decision': decision,
-                                    'Description': description
-                                }
-                                st.session_state.players_list.append(player_info)
-                                st.session_state.show_player_form = False
-                                st.success(f"✅ {name} added to report!")
-                                st.rerun()
+                                # Jugador existente
+                                if not selected_number or selected_number == "Select..." or performance == "Select..." or watch == "Select..." or decision == "Select...":
+                                    st.error("Please fill all required fields")
+                                else:
+                                    # Agregar jugador a la lista (usando valores editados)
+                                    player_info = {
+                                        'Team': player_team,
+                                        'Number': selected_number,
+                                        'Name': name,
+                                        'Position': position,
+                                        'Sec. Position': sec_position if sec_position != "Select..." else '',
+                                        'Birth Date': birth_date,
+                                        'Nationality': nationality,
+                                        'Agent': agent if agent else 'N/A',
+                                        'Performance': performance,
+                                        'Watch': watch,
+                                        'Decision': decision,
+                                        'Description': description
+                                    }
+                                    st.session_state.players_list.append(player_info)
+                                    st.session_state.show_player_form = False
+                                    st.success(f"✅ {name} added to report!")
+                                    st.rerun()
             
             # Mostrar lista de jugadores añadidos
             if st.session_state.players_list:
